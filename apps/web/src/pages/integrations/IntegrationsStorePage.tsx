@@ -184,6 +184,10 @@ export interface ICredentials {
   clientId?: string;
   projectName?: string;
   serviceAccount?: string;
+  baseUrl?: string;
+  requireTls?: boolean;
+  ignoreTls?: boolean;
+  tlsOptions?: Record<string, unknown>;
 }
 
 export interface IntegrationEntity {
@@ -217,7 +221,11 @@ function initializeProviders(integrations: IntegrationEntity[]): IIntegratedProv
     if (integration?.credentials && Object.keys(clonedCredentials).length !== 0) {
       clonedCredentials.forEach((credential) => {
         // eslint-disable-next-line no-param-reassign
-        credential.value = integration.credentials[credential.key]?.toString();
+        if (credential.type === 'object' && integration.credentials[credential.key]) {
+          credential.value = JSON.stringify(integration.credentials[credential.key]);
+        } else {
+          credential.value = integration.credentials[credential.key]?.toString();
+        }
       });
     }
 

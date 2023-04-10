@@ -37,6 +37,10 @@ const integrationSchema = new Schema<IntegrationDBModel>(
       clientId: Schema.Types.String,
       projectName: Schema.Types.String,
       serviceAccount: Schema.Types.String,
+      baseUrl: Schema.Types.String,
+      requireTls: Schema.Types.Boolean,
+      ignoreTls: Schema.Types.Boolean,
+      tlsOptions: Schema.Types.Mixed,
     },
 
     active: {
