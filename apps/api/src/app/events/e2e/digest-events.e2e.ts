@@ -10,8 +10,6 @@ import { UserSession, SubscribersService } from '@novu/testing';
 import axios from 'axios';
 import { expect } from 'chai';
 import { getTime, parseISO } from 'date-fns';
-import mongoose from 'mongoose';
-import { setTimeout } from 'timers/promises';
 
 import { WorkflowQueueService } from '../services/workflow-queue/workflow.queue.service';
 import { SendMessage } from '../usecases/send-message/send-message.usecase';

@@ -19,8 +19,11 @@ export class UpdateSubscriber {
     }
 
     const updatePayload: Partial<SubscriberEntity> = {};
-    if (command.email != null) {
+    const unsetPayload: Partial<SubscriberEntity> = {};
+    if (command.email) {
       updatePayload.email = command.email;
+    } else {
+      unsetPayload.email = '';
     }
 
     if (command.phone != null) {
@@ -63,7 +66,10 @@ export class UpdateSubscriber {
         _environmentId: command.environmentId,
         _id: foundSubscriber._id,
       },
-      { $set: updatePayload }
+      {
+        $set: updatePayload,
+        $unset: unsetPayload,
+      }
     );
 
     return {
@@ -78,7 +84,7 @@ export function subscriberNeedUpdate(
   subscriberPayload: Partial<SubscriberEntity>
 ): boolean {
   return (
-    !!(subscriberPayload?.email && subscriber?.email !== subscriberPayload?.email) ||
+    !!(subscriber?.email !== subscriberPayload?.email) ||
     !!(subscriberPayload?.firstName && subscriber?.firstName !== subscriberPayload?.firstName) ||
     !!(subscriberPayload?.lastName && subscriber?.lastName !== subscriberPayload?.lastName) ||
     !!(subscriberPayload?.phone && subscriber?.phone !== subscriberPayload?.phone) ||
