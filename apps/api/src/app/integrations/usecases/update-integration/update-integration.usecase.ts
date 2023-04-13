@@ -1,12 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException, Inject, Logger } from '@nestjs/common';
 import { IntegrationEntity, IntegrationRepository } from '@novu/dal';
+import { ChannelTypeEnum } from '@novu/shared';
+
 import { UpdateIntegrationCommand } from './update-integration.command';
 import { DeactivateSimilarChannelIntegrations } from '../deactivate-integration/deactivate-integration.usecase';
-import { encryptCredentials } from '@novu/application-generic';
+import { AnalyticsService, encryptCredentials } from '@novu/application-generic';
 import { CheckIntegration } from '../check-integration/check-integration.usecase';
 import { CheckIntegrationCommand } from '../check-integration/check-integration.command';
-import { CacheKeyPrefixEnum, InvalidateCacheService } from '../../../shared/services/cache';
-import { ChannelTypeEnum } from '@novu/shared';
+import { InvalidateCacheService } from '../../../shared/services/cache';
+import { ANALYTICS_SERVICE } from '../../../shared/shared.module';
+import { buildIntegrationKey } from '../../../shared/services/cache/key-builders/queries';
 
 @Injectable()
 export class UpdateIntegration {
@@ -15,7 +18,8 @@ export class UpdateIntegration {
   constructor(
     private invalidateCache: InvalidateCacheService,
     private integrationRepository: IntegrationRepository,
-    private deactivateSimilarChannelIntegrations: DeactivateSimilarChannelIntegrations
+    private deactivateSimilarChannelIntegrations: DeactivateSimilarChannelIntegrations,
+    @Inject(ANALYTICS_SERVICE) private analyticsService: AnalyticsService
   ) {}
 
   async execute(command: UpdateIntegrationCommand): Promise<IntegrationEntity> {
@@ -26,11 +30,17 @@ export class UpdateIntegration {
       throw new NotFoundException(`Entity with id ${command.integrationId} not found`);
     }
 
-    await this.invalidateCache.clearCache({
-      storeKeyPrefix: [CacheKeyPrefixEnum.INTEGRATION],
-      credentials: {
-        environmentId: command.environmentId,
-      },
+    this.analyticsService.track('Update Integration - [Integrations]', command.userId, {
+      providerId: existingIntegration.providerId,
+      channel: existingIntegration.channel,
+      _organization: command.organizationId,
+      active: command.active,
+    });
+
+    await this.invalidateCache.invalidateQuery({
+      key: buildIntegrationKey().invalidate({
+        _environmentId: command.environmentId,
+      }),
     });
 
     if (command.check) {

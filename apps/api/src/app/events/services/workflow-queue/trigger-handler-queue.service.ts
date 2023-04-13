@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
-import { Queue, QueueBaseOptions, Worker } from 'bullmq';
+import { Injectable, Logger } from '@nestjs/common';
+import { QueueBaseOptions } from 'bullmq';
 import { getRedisPrefix } from '@novu/shared';
+const nr = require('newrelic');
 import { ConnectionOptions } from 'tls';
-import { PinoLogger, storage, Store } from '@novu/application-generic';
+import { BullmqService, PinoLogger, storage, Store } from '@novu/application-generic';
 
 import { TriggerEvent, TriggerEventCommand } from '../../usecases/trigger-event';
 
@@ -21,18 +22,19 @@ export class TriggerHandlerQueueService {
       tls: process.env.REDIS_TLS as ConnectionOptions,
     },
   };
-  public readonly queue: Queue;
-  public readonly worker: Worker;
+  private readonly bullMqService: BullmqService;
 
   constructor(private triggerEventUsecase: TriggerEvent) {
-    this.queue = new Queue<TriggerEventCommand>('trigger-handler', {
+    const name = 'trigger-handler';
+    this.bullMqService = new BullmqService();
+
+    this.bullMqService.createQueue(name, {
       ...this.bullConfig,
       defaultJobOptions: {
         removeOnComplete: true,
       },
     });
-
-    this.worker = new Worker('trigger-handler', this.getWorkerProcessor(), this.getWorkerOpts());
+    this.bullMqService.createWorker(name, this.getWorkerProcessor(), this.getWorkerOpts());
   }
 
   private getWorkerOpts() {
@@ -46,10 +48,37 @@ export class TriggerHandlerQueueService {
   public getWorkerProcessor() {
     return async ({ data }: { data: TriggerEventCommand }) => {
       return await new Promise(async (resolve, reject) => {
-        storage.run(new Store(PinoLogger.root), () => {
-          this.triggerEventUsecase.execute(data).then(resolve).catch(reject);
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        const _this = this;
+
+        nr.startBackgroundTransaction('trigger-handler-queue', 'Trigger Engine', function () {
+          const transaction = nr.getTransaction();
+
+          storage.run(new Store(PinoLogger.root), () => {
+            _this.triggerEventUsecase
+              .execute(data)
+              .then(resolve)
+              .catch(reject)
+              .finally(() => {
+                transaction.end();
+              });
+          });
         });
       });
     };
+  }
+
+  public add(id: string, data: any, organizationId: string) {
+    Logger.log(`TriggerHandlerQueueService.add: ${id} Group: ${organizationId}`);
+
+    this.bullMqService.add(
+      id,
+      data,
+      {
+        removeOnComplete: true,
+        removeOnFail: true,
+      },
+      organizationId
+    );
   }
 }
